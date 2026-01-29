@@ -1,8 +1,8 @@
 import { bootstrapApplication } from '@angular/platform-browser';
-import { AppComponent } from './app/app.component';
+import { appcomponent } from './app/app.component';
 import { provideZoneChangeDetection } from '@angular/core';
 
-bootstrapApplication(AppComponent, {
+bootstrapApplication(appcomponent, {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true })
   ]
