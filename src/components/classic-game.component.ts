@@ -46,6 +46,15 @@ interface Particle {
   rotation: number;
 }
 
+interface Flash {
+  id: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  isVertical: boolean;
+}
+
 @Component({
   selector: 'app-classic-game',
   standalone: true,
@@ -311,6 +320,36 @@ interface Particle {
           </div>
         }
       </footer>
+      
+      <!-- Dragging Phantom (Ghosting Effect) -->
+      @if (dragState().isDragging && dragState().shape) {
+        <div 
+          class="fixed pointer-events-none z-50 origin-top-left drop-shadow-[20px_20px_0_rgba(0,0,0,0.4)] transition-transform duration-75"
+          [style.left.px]="dragState().x"
+          [style.top.px]="dragState().y"
+          [style.transform]="'translate(-50%, -120%) scale(1.15)'" 
+        >
+             <div class="flex flex-col gap-0.5 opacity-90">
+                @for (row of dragState().shape!.matrix; track $index; let rIdx = $index) {
+                  <div class="flex gap-0.5">
+                    @for (val of row; track $index; let cIdx = $index) {
+                      <div class="w-11 h-11 relative" 
+                           [ngClass]="val ? dragState().shape!.colorClass : 'opacity-0'">
+                         @if (val) {
+                             <div class="absolute top-1 left-1 w-1/3 h-1/3 bg-white/30 skew-x-[-15deg]"></div>
+                             @if (dragState().shape?.starPosition && dragState().shape?.starPosition?.r === rIdx && dragState().shape?.starPosition?.c === cIdx) {
+                               <div class="absolute inset-0 flex items-center justify-center z-20">
+                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#FDD835" stroke="black" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                               </div>
+                             }
+                         }
+                      </div>
+                    }
+                  </div>
+                }
+             </div>
+        </div>
+      }
 
       <!-- MISSION BRIEFING OVERLAY -->
       @if (showBriefing()) {
@@ -505,8 +544,8 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
   feverProgress = signal<number>(0);
   isFeverActive = signal<boolean>(false);
   feverTimeRemaining = signal<number>(0);
-  private feverInterval: any = null;
-  private decayInterval: any = null;
+  private feverInterval: ReturnType<typeof setInterval> | null = null;
+  private decayInterval: ReturnType<typeof setInterval> | null = null;
   
   // Chronos State
   temporalEcho = signal<Cell[]>(this.createEmptyGrid());
@@ -527,7 +566,7 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
   boardScale = signal(1); // 1.0 = normal, <1 = squash, >1 = stretch
   floatingTexts = signal<FloatingText[]>([]);
   particles = signal<Particle[]>([]);
-  activeFlashes = signal<{id: number, x: number, y: number, w: number, h: number, isVertical: boolean}[]>([]);
+  activeFlashes = signal<Flash[]>([]);
 
   // Interaction State
   dragState = signal<DragState>({
@@ -794,8 +833,14 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
     event.preventDefault(); 
     this.updateGridMetrics();
 
-    const clientX = (event as any).touches ? (event as any).touches[0].clientX : (event as MouseEvent).clientX;
-    const clientY = (event as any).touches ? (event as any).touches[0].clientY : (event as MouseEvent).clientY;
+    let clientX: number, clientY: number;
+    if (event instanceof MouseEvent) {
+        clientX = event.clientX;
+        clientY = event.clientY;
+    } else {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+    }
 
     this.dragState.set({
       isDragging: true,
@@ -816,11 +861,20 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
     this.globalUpListener = this.renderer.listen('document', 'mouseup', this.onEnd.bind(this));
   }
 
-  onMove(event: MouseEvent | TouchEvent) {
+  onMove(event: Event) {
     if (!this.dragState().isDragging) return;
 
-    const clientX = (event as any).touches ? (event as any).touches[0].clientX : (event as MouseEvent).clientX;
-    const clientY = (event as any).touches ? (event as any).touches[0].clientY : (event as MouseEvent).clientY;
+    let clientX: number, clientY: number;
+    // Strict Type Guard
+    if (event instanceof MouseEvent) {
+        clientX = event.clientX;
+        clientY = event.clientY;
+    } else if (event instanceof TouchEvent) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+    } else {
+        return;
+    }
 
     // Direct Signal Update is fast enough for 60fps in Zoneless Angular
     this.dragState.update(s => ({ ...s, x: clientX, y: clientY }));
@@ -832,14 +886,19 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
 
     const { shape, shapeIndex } = this.dragState();
     const ghost = this.ghostIndices();
+    let placed = false;
 
     if (ghost.length > 0 && shape) {
-      this.placePiece(ghost, shape, shapeIndex);
-      // JUICE: Board bounce
-      this.boardScale.set(1.02);
-      setTimeout(() => this.boardScale.set(1), 150);
-    } else {
-      // JUICE: Reset
+      placed = this.placePiece(ghost, shape, shapeIndex);
+      if (placed) {
+        // JUICE: Board bounce
+        this.boardScale.set(1.02);
+        setTimeout(() => this.boardScale.set(1), 150);
+      }
+    } 
+    
+    if (!placed) {
+      // JUICE: Reset if drag cancelled/failed
       this.boardScale.set(1);
     }
 
@@ -910,8 +969,8 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
     return indices;
   }
 
-  placePiece(indices: number[], shape: BlockShape, dockIndex: number) {
-    if (!indices || indices.length === 0) return;
+  placePiece(indices: number[], shape: BlockShape, dockIndex: number): boolean {
+    if (!indices || indices.length === 0) return false;
 
     this.movesSinceEcho.update(v => v + 1);
     if (this.movesSinceEcho() >= 10) this.snapshotEcho();
@@ -954,6 +1013,7 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
     this.audio.playPlacement();
     this.triggerHaptic();
 
+    // REMOVE PIECE FROM DOCK ONLY ON SUCCESS
     const pieces = [...this.availablePieces()];
     pieces[dockIndex] = null;
     this.availablePieces.set(pieces);
@@ -977,6 +1037,8 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
     } else {
       this.checkGameOver();
     }
+
+    return true;
   }
 
   checkLines(potentialParadox: boolean = false): number {
@@ -1083,7 +1145,7 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
 
     // Visual Flash for Lines (Code Breaker Juice)
     if (this.missionType() === 'CODE_BREAKER') {
-        const flashes: any[] = [];
+        const flashes: Flash[] = [];
         rows.forEach(r => flashes.push({ id: Math.random(), x: 0, y: r*this.cellSize, w: this.cellSize*8, h: this.cellSize, isVertical: false }));
         cols.forEach(c => flashes.push({ id: Math.random(), x: c*this.cellSize, y: 0, w: this.cellSize, h: this.cellSize*8, isVertical: true }));
         this.activeFlashes.update(curr => [...curr, ...flashes]);

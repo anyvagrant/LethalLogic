@@ -1,6 +1,12 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { PersistenceService } from './persistence.service';
 
+declare global {
+  interface Window {
+    webkitAudioContext: typeof AudioContext;
+  }
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -40,7 +46,7 @@ export class AudioService {
 
   private initAudioContext() {
     try {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
       this.masterGain = this.ctx.createGain();
       this.masterGain.connect(this.ctx.destination);
     } catch (e) {
