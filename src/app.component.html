@@ -1,0 +1,106 @@
+<div class="w-full h-full" (click)="unlockAudioContext()">
+  @switch (currentView()) {
+    @case ('menu') {
+      <div class="min-h-screen w-full flex flex-col items-center py-8 px-4 max-w-md mx-auto relative animate-[fadeIn_0.5s]">
+        
+        <!-- Controls Container (Language + Mute) -->
+        <div class="absolute top-4 right-4 z-50 flex flex-col gap-2">
+            <!-- Language Toggle -->
+            <button 
+              (click)="lang.toggleLanguage(); $event.stopPropagation()"
+              class="bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/40 rounded-full p-2 shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 px-3 w-20"
+              title="Change Language">
+              <span class="text-xl leading-none">
+                {{ lang.currentLang() === 'pt' ? '🇧🇷' : '🇺🇸' }}
+              </span>
+              <span class="text-xs font-bold text-white uppercase tracking-wider">
+                {{ lang.currentLang() === 'pt' ? 'PT' : 'EN' }}
+              </span>
+            </button>
+
+            <!-- Mute Toggle -->
+            <button 
+              (click)="audio.toggleMute(); $event.stopPropagation()"
+              class="bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/40 rounded-full p-2 shadow-lg transition-transform active:scale-95 flex items-center justify-center w-20 h-9"
+              [title]="audio.isMuted() ? 'Unmute' : 'Mute'">
+               @if (audio.isMuted()) {
+                 <!-- Muted Icon -->
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                   <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                   <line x1="23" y1="9" x2="17" y2="15"></line>
+                   <line x1="17" y1="9" x2="23" y2="15"></line>
+                 </svg>
+               } @else {
+                 <!-- Sound Icon -->
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                   <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                   <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                 </svg>
+               }
+            </button>
+        </div>
+
+        <!-- Logo Section -->
+        <header class="mt-8 mb-6 scale-110">
+          <app-game-logo (secretTriggered)="unlockAllLevels()" />
+        </header>
+
+        <!-- Daily Card -->
+        <section class="w-full mb-10 px-2">
+          <app-daily-card />
+        </section>
+
+        <!-- Menu Buttons -->
+        <main class="w-full flex flex-col gap-4 px-4 mb-auto">
+          
+          <!-- Adventure Button -->
+          <div (click)="startAdventure()">
+            <app-game-button 
+              [label]="lang.t().menu.adventure" 
+              variant="orange" 
+            >
+              <svg icon width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" fill="rgba(255,255,255,0.2)"/>
+                <circle cx="12" cy="10" r="3" fill="white"/>
+              </svg>
+            </app-game-button>
+          </div>
+
+          <!-- Classic Button -->
+          <div (click)="startClassicGame()">
+            <app-game-button 
+              [label]="lang.t().menu.classic" 
+              variant="green" 
+            >
+              <svg icon width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4Z" fill="rgba(255,255,255,0.2)"/>
+              </svg>
+            </app-game-button>
+          </div>
+
+        </main>
+      </div>
+    }
+    @case ('game') {
+      <!-- Game View (Classic or Adventure) -->
+      <app-classic-game 
+        [mode]="gameMode()"
+        [level]="currentLevel()"
+        (returnToMenu)="showMenu()"
+        (levelCompleted)="handleLevelComplete()"
+        (levelWon)="onLevelVictory()"
+        (gameLost)="handleGameLost()"
+        (resetAdventure)="handleResetAdventure()"
+        (switchToClassic)="startClassicGame()"
+      />
+    }
+    @case ('adventure') {
+      <!-- Adventure Map View -->
+      <app-adventure-map 
+        [unlockedLevel]="maxUnlockedLevel()"
+        (returnToMenu)="showMenu()" 
+        (playLevel)="playSpecificLevel($event)" 
+      />
+    }
+  }
+</div>
