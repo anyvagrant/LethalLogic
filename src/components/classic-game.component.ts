@@ -554,7 +554,10 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
   
   // Calculated State
   targetScore = computed(() => this.level() * 500); 
-  progressPercentage = computed(() => Math.min(100, (this.missionProgress() / this.missionTarget()) * 100));
+  progressPercentage = computed(() => {
+     if (this.missionTarget() <= 0) return 0;
+     return Math.min(100, (this.missionProgress() / this.missionTarget()) * 100);
+  });
   gameWon = signal(false);
   availablePieces = signal<(BlockShape | null)[]>([]);
   gameOver = signal(false);
@@ -624,9 +627,15 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
     const lvl = this.level();
     const mode = this.mode();
     
+    // Reset Progress
     this.missionProgress.set(0);
     this.horizontalLinesCleared.set(0);
     this.verticalLinesCleared.set(0);
+    
+    // Reset Limits for safety
+    this.missionTarget.set(0);
+    this.horizontalLinesNeeded.set(0);
+    this.verticalLinesNeeded.set(0);
 
     // 1. Configure Mission Logic
     if (mode === 'classic') {
@@ -681,31 +690,33 @@ export class ClassicGameComponent implements AfterViewInit, OnDestroy {
   checkWinCondition() {
     if (this.mode() !== 'adventure' || this.gameWon() || this.gameComplete()) return;
     
-    let won = false;
+    // Fix: Instant win prevention. If targets are 0 (uninitialized), do not win.
     if (this.missionType() === 'CODE_BREAKER') {
-        if (this.horizontalLinesCleared() >= this.horizontalLinesNeeded() &&
+        if (this.horizontalLinesNeeded() > 0 && 
+            this.horizontalLinesCleared() >= this.horizontalLinesNeeded() &&
             this.verticalLinesCleared() >= this.verticalLinesNeeded()) {
-            won = true;
+            this.triggerWin();
         }
     } else {
-        if (this.missionProgress() >= this.missionTarget()) {
-            won = true;
+        // Score, Combos, Echos
+        if (this.missionTarget() > 0 && this.missionProgress() >= this.missionTarget()) {
+            this.triggerWin();
         }
     }
+  }
 
-    if (won) {
+  triggerWin() {
       if (this.level() === 100) {
          this.gameComplete.set(true);
          this.stopFever();
          this.audio.playWin();
-         this.levelWon.emit(); // Saves progress (effectively beating the game)
+         this.levelWon.emit(); 
       } else {
          this.gameWon.set(true);
          this.stopFever();
          this.levelWon.emit();
          this.audio.playWin();
       }
-    }
   }
 
   getDockScale(piece: BlockShape): number {

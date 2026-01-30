@@ -72,6 +72,7 @@ export class AppComponent {
   }
 
   playSpecificLevel(level: number) {
+    console.log(`Starting Level ${level}`);
     this.currentLevel.set(level);
     this.gameMode.set('adventure');
     this.currentView.set('game');
@@ -110,10 +111,14 @@ export class AppComponent {
   }
 
   handleLevelComplete() {
-    // Unlock next level logic is already handled by onLevelVictory, 
-    // but we use this primarily for navigation now.
+    // Called when user clicks "Next Level" in the victory screen
     const nextLevel = this.currentLevel() + 1;
-    this.playSpecificLevel(nextLevel);
+    if (nextLevel <= 100) {
+      this.playSpecificLevel(nextLevel);
+    } else {
+      // Finished the game
+      this.showMenu();
+    }
   }
 
   handleResetAdventure() {
